@@ -81,6 +81,18 @@ impl<'a, R: Read> AvroArrowArrayReader<'a, R> {
                 lookup: ref schema_lookup,
                 ..
             } => Ok(schema_lookup.clone()),
+            AvroSchema::Union(union_schema) => {
+                if let Some(&AvroSchema::Record {
+                    lookup: ref schema_lookup,
+                    ..
+                }) = union_schema.variants().get(1) {
+                    Ok(schema_lookup.clone())
+                } else {
+                    Err(DataFusionError::ArrowError(SchemaError(
+                        "expected avro schema to be a record".to_string(),
+                    )))
+                }
+            },
             _ => Err(DataFusionError::ArrowError(SchemaError(
                 "expected avro schema to be a record".to_string(),
             ))),
@@ -95,6 +107,15 @@ impl<'a, R: Read> AvroArrowArrayReader<'a, R> {
             .take(batch_size)
             .map(|value| match value {
                 Ok(Value::Record(v)) => Ok(v),
+                Ok(Value::Union(_, b)) => {
+                    if let Value::Record(v) = *b {
+                        Ok(v)
+                    } else {
+                        Err(ArrowError::ParseError(format!(
+                            "Row needs to be of type object"
+                        )))
+                    }
+                },
                 Err(e) => Err(ArrowError::ParseError(format!(
                     "Failed to parse avro value: {e:?}"
                 ))),
