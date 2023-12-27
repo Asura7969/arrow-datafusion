@@ -20,9 +20,10 @@
 use crate::optimizer::ApplyOrder;
 use crate::{OptimizerConfig, OptimizerRule};
 use datafusion_common::Result;
+use datafusion_expr::expr::WindowFunction;
 use datafusion_expr::{
     logical_plan::{Join, JoinType, Limit, LogicalPlan, Sort, TableScan, Union},
-    CrossJoin,
+    window_function, CrossJoin, Expr, Window,
 };
 use std::sync::Arc;
 
@@ -201,6 +202,28 @@ impl OptimizerRule for PushDownLimit {
                     plan.with_new_inputs(&[child_plan.inputs()[0].clone()])?;
                 Some(child_plan.with_new_inputs(&[new_limit])?)
             }
+            LogicalPlan::Window(Window {
+                input,
+                // window_expr: Expr::WindowFunction(window),
+                window_expr,
+                schema,
+            }) if window_expr.iter().all(|expr| match expr {
+                Expr::WindowFunction(window) => support_push_down_through_window(window),
+                _ => false,
+            }) =>
+            {
+                let new_input = LogicalPlan::Limit(Limit {
+                    skip: 0,
+                    fetch: Some(fetch + skip),
+                    input: input.clone(),
+                });
+                let new_window = LogicalPlan::Window(Window {
+                    input: Arc::new(new_input),
+                    window_expr: window_expr.clone(),
+                    schema: schema.clone(),
+                });
+                Some(new_window)
+            }
             _ => None,
         };
 
@@ -214,6 +237,23 @@ impl OptimizerRule for PushDownLimit {
     fn apply_order(&self) -> Option<ApplyOrder> {
         Some(ApplyOrder::TopDown)
     }
+}
+
+/// The window frame of Rank, DenseRank and RowNumber can only be UNBOUNDED PRECEDING to
+/// CURRENT ROW.
+fn support_push_down_through_window(window: &WindowFunction) -> bool {
+    window.partition_by.is_empty()
+        && window.window_frame.unbounded_preceding_to_current_row()
+        && matches!(
+            window.fun,
+            window_function::WindowFunction::BuiltInWindowFunction(
+                window_function::BuiltInWindowFunction::RowNumber
+            ) | window_function::WindowFunction::BuiltInWindowFunction(
+                window_function::BuiltInWindowFunction::Rank
+            ) | window_function::WindowFunction::BuiltInWindowFunction(
+                window_function::BuiltInWindowFunction::DenseRank
+            )
+        )
 }
 
 fn push_down_join(join: &Join, limit: usize) -> Option<Join> {

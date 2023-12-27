@@ -114,6 +114,15 @@ impl WindowFrame {
         }
     }
 
+    pub fn unbounded_preceding_to_current_row(&self) -> bool {
+        match &self.start_bound {
+            WindowFrameBound::Preceding(n) => {
+                n.is_null() && self.end_bound == WindowFrameBound::CurrentRow
+            }
+            _ => false,
+        }
+    }
+
     /// Get reversed window frame. For example
     /// `3 ROWS PRECEDING AND 2 ROWS FOLLOWING` -->
     /// `2 ROWS PRECEDING AND 3 ROWS FOLLOWING`
