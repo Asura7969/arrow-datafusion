@@ -204,25 +204,35 @@ impl OptimizerRule for PushDownLimit {
             }
             LogicalPlan::Window(Window {
                 input,
-                // window_expr: Expr::WindowFunction(window),
                 window_expr,
-                schema,
-            }) if window_expr.iter().all(|expr| match expr {
-                Expr::WindowFunction(window) => support_push_down_through_window(window),
-                _ => false,
-            }) =>
-            {
-                let new_input = LogicalPlan::Limit(Limit {
-                    skip: 0,
-                    fetch: Some(fetch + skip),
-                    input: input.clone(),
-                });
-                let new_window = LogicalPlan::Window(Window {
-                    input: Arc::new(new_input),
-                    window_expr: window_expr.clone(),
-                    schema: schema.clone(),
-                });
-                Some(new_window)
+                schema: _,
+            }) => {
+                let mut exprs = Vec::new();
+                for expr in window_expr.iter() {
+                    if let Expr::WindowFunction(window) = expr {
+                        exprs.push(window.order_by.clone());
+                    }
+                }
+                if window_expr.iter().all(|expr| match expr {
+                    Expr::WindowFunction(window) => {
+                        support_push_down_through_window(window)
+                    }
+                    _ => false,
+                }) {
+                    let new_sort = LogicalPlan::Sort(Sort {
+                        expr: exprs.first().map_or(vec![], |expr| expr.clone()),
+                        input: input.clone(),
+                        fetch: Some(fetch + skip),
+                    });
+                    let new_limit = LogicalPlan::Limit(Limit {
+                        skip: 0,
+                        fetch: Some(fetch + skip),
+                        input: Arc::new(new_sort),
+                    });
+                    Some(child_plan.with_new_inputs(&[new_limit])?)
+                } else {
+                    None
+                }
             }
             _ => None,
         };
