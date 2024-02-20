@@ -397,6 +397,13 @@ impl AggregateExec {
         self.limit = limit;
         self
     }
+
+    /// Set the `ordering` of this AggExec
+    pub fn with_ordering(mut self, output_ordering: Option<LexOrdering>) -> Self {
+        self.output_ordering = output_ordering;
+        self
+    }
+
     /// Grouping expressions
     pub fn group_expr(&self) -> &PhysicalGroupBy {
         &self.group_by
@@ -582,6 +589,16 @@ impl DisplayAs for AggregateExec {
 
                 if self.input_order_mode != InputOrderMode::Linear {
                     write!(f, ", ordering_mode={:?}", self.input_order_mode)?;
+                }
+
+                if self.output_ordering().is_some() {
+                    let order = self.output_ordering()
+                        .map(PhysicalSortRequirement::from_sort_exprs)
+                        .unwrap_or_default()
+                        .iter().map(|e| format!("{}", e))
+                        .collect::<Vec<String>>()
+                        .join(", ");
+                    write!(f, ", order=[{}]", order)?
                 }
             }
         }

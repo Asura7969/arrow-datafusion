@@ -32,6 +32,7 @@ use crate::physical_optimizer::output_requirements::OutputRequirements;
 use crate::physical_optimizer::pipeline_checker::PipelineChecker;
 use crate::physical_optimizer::topk_aggregation::TopKAggregation;
 use crate::{error::Result, physical_plan::ExecutionPlan};
+use crate::physical_optimizer::push_down_order_limit::PushDownOderLimit;
 
 /// `PhysicalOptimizerRule` transforms one ['ExecutionPlan'] into another which
 /// computes the same results, but in a potentially more efficient
@@ -113,6 +114,7 @@ impl PhysicalOptimizer {
             // into an `order by max(x) limit y`. In this case it will copy the limit value down
             // to the aggregation, allowing it to use only y number of accumulators.
             Arc::new(TopKAggregation::new()),
+            Arc::new(PushDownOderLimit::new()),
             // The ProjectionPushdown rule tries to push projections towards
             // the sources in the execution plan. As a result of this process,
             // a projection can disappear if it reaches the source providers, and
