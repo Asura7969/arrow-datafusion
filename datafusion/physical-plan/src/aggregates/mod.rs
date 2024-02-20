@@ -487,6 +487,10 @@ impl AggregateExec {
     /// This method qualifies the use of the LimitedDistinctAggregation rewrite rule
     /// on an AggregateExec.
     pub fn is_unordered_unfiltered_group_by_distinct(&self) -> bool {
+        if self.get_minmax_desc().is_none() {
+            return true;
+        }
+
         // ensure there is a group by
         if self.group_by().is_empty() {
             return false;
