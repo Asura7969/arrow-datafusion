@@ -55,9 +55,11 @@ mod order;
 mod row_hash;
 mod topk;
 mod topk_stream;
+mod topk_limit_stream;
 
 pub use datafusion_expr::AggregateFunction;
 pub use datafusion_physical_expr::expressions::create_aggregate_expr;
+use crate::aggregates::topk_limit_stream::GroupedTopKLimitAggregateStream;
 
 /// Hash aggregate modes
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -225,6 +227,7 @@ enum StreamType {
     AggregateStream(AggregateStream),
     GroupedHash(GroupedHashAggregateStream),
     GroupedPriorityQueue(GroupedTopKAggregateStream),
+    GroupedLimitQueue(GroupedTopKLimitAggregateStream),
 }
 
 impl From<StreamType> for SendableRecordBatchStream {
@@ -233,6 +236,7 @@ impl From<StreamType> for SendableRecordBatchStream {
             StreamType::AggregateStream(stream) => Box::pin(stream),
             StreamType::GroupedHash(stream) => Box::pin(stream),
             StreamType::GroupedPriorityQueue(stream) => Box::pin(stream),
+            StreamType::GroupedLimitQueue(stream) => Box::pin(stream),
         }
     }
 }
@@ -451,6 +455,12 @@ impl AggregateExec {
             )?));
         }
 
+        if let (Some(_), Some(_)) = (self.limit, self.output_ordering()) {
+            return Ok(StreamType::GroupedLimitQueue(
+                GroupedTopKLimitAggregateStream::new(self, context, partition)?,
+            ));
+        }
+
         // grouping by an expression that has a sort/limit upstream
         if let Some(limit) = self.limit {
             if !self.is_unordered_unfiltered_group_by_distinct() {
@@ -487,10 +497,6 @@ impl AggregateExec {
     /// This method qualifies the use of the LimitedDistinctAggregation rewrite rule
     /// on an AggregateExec.
     pub fn is_unordered_unfiltered_group_by_distinct(&self) -> bool {
-        if self.get_minmax_desc().is_none() {
-            return true;
-        }
-
         // ensure there is a group by
         if self.group_by().is_empty() {
             return false;

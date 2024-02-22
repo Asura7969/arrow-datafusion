@@ -50,7 +50,7 @@ pub trait PartitionedStream: std::fmt::Debug + Send {
 
 /// A newtype wrapper around a set of fused [`SendableRecordBatchStream`]
 /// that implements debug, and skips over empty [`RecordBatch`]
-struct FusedStreams(Vec<Fuse<SendableRecordBatchStream>>);
+pub struct FusedStreams(Vec<Fuse<SendableRecordBatchStream>>);
 
 impl std::fmt::Debug for FusedStreams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
