@@ -23,6 +23,7 @@ use std::sync::Arc;
 use super::DisplayAs;
 use crate::aggregates::{
     no_grouping::AggregateStream, row_hash::GroupedHashAggregateStream,
+    topk_limit_stream::GroupedTopKLimitAggregateStream,
     topk_stream::GroupedTopKAggregateStream,
 };
 use crate::metrics::{ExecutionPlanMetricsSet, MetricsSet};
@@ -54,12 +55,11 @@ mod no_grouping;
 mod order;
 mod row_hash;
 mod topk;
-mod topk_stream;
 mod topk_limit_stream;
+mod topk_stream;
 
 pub use datafusion_expr::AggregateFunction;
 pub use datafusion_physical_expr::expressions::create_aggregate_expr;
-use crate::aggregates::topk_limit_stream::GroupedTopKLimitAggregateStream;
 
 /// Hash aggregate modes
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -602,10 +602,12 @@ impl DisplayAs for AggregateExec {
                 }
 
                 if self.output_ordering().is_some() {
-                    let order = self.output_ordering()
+                    let order = self
+                        .output_ordering()
                         .map(PhysicalSortRequirement::from_sort_exprs)
                         .unwrap_or_default()
-                        .iter().map(|e| format!("{}", e))
+                        .iter()
+                        .map(|e| format!("{}", e))
                         .collect::<Vec<String>>()
                         .join(", ");
                     write!(f, ", order=[{}]", order)?

@@ -137,8 +137,7 @@ impl PhysicalOptimizerRule for PushDownOderLimit {
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let plan = plan.transform_down(&|plan| {
             Ok(
-                if let Some(plan) =
-                    PushDownOderLimit::transform_sort_limit(plan.clone())
+                if let Some(plan) = PushDownOderLimit::transform_sort_limit(plan.clone())
                 {
                     Transformed::Yes(plan)
                 } else {

@@ -30,9 +30,9 @@ use crate::physical_optimizer::join_selection::JoinSelection;
 use crate::physical_optimizer::limited_distinct_aggregation::LimitedDistinctAggregation;
 use crate::physical_optimizer::output_requirements::OutputRequirements;
 use crate::physical_optimizer::pipeline_checker::PipelineChecker;
+use crate::physical_optimizer::push_down_order_limit::PushDownOderLimit;
 use crate::physical_optimizer::topk_aggregation::TopKAggregation;
 use crate::{error::Result, physical_plan::ExecutionPlan};
-use crate::physical_optimizer::push_down_order_limit::PushDownOderLimit;
 
 /// `PhysicalOptimizerRule` transforms one ['ExecutionPlan'] into another which
 /// computes the same results, but in a potentially more efficient

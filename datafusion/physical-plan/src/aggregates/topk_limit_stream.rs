@@ -17,8 +17,13 @@
 
 //! A memory-conscious aggregation implementation that limits group buckets to a fixed number
 
-use crate::aggregates::{aggregate_expressions, AggregateExec, evaluate_group_by, evaluate_many, PhysicalGroupBy};
+use crate::aggregates::{
+    aggregate_expressions, evaluate_group_by, evaluate_many, AggregateExec,
+    PhysicalGroupBy,
+};
+use crate::sorts::sort::sort_batch;
 use crate::{ExecutionPlan, RecordBatchStream, SendableRecordBatchStream};
+use arrow::compute::concat_batches;
 use arrow::util::pretty::print_batches;
 use arrow_array::RecordBatch;
 use arrow_schema::SchemaRef;
@@ -31,8 +36,6 @@ use log::{trace, Level};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use arrow::compute::concat_batches;
-use crate::sorts::sort::sort_batch;
 
 pub struct GroupedTopKLimitAggregateStream {
     partition: usize,
@@ -63,7 +66,7 @@ impl GroupedTopKLimitAggregateStream {
             .output_ordering()
             .ok_or_else(|| DataFusionError::Internal("ordering required".to_string()))?
             .iter()
-            .map(|e| e.clone())
+            .cloned()
             .collect::<Vec<_>>();
         let order = order.clone();
         let limit = aggr.limit();
@@ -77,7 +80,7 @@ impl GroupedTopKLimitAggregateStream {
             group_by,
             limit,
             in_mem_batches: Vec::new(),
-            order
+            order,
         })
     }
 }
@@ -90,7 +93,6 @@ impl RecordBatchStream for GroupedTopKLimitAggregateStream {
 
 impl GroupedTopKLimitAggregateStream {
     fn sort_in_mem_batches(self: &mut Pin<&mut Self>) -> Result<()> {
-
         let input_batch = concat_batches(&self.schema(), &self.in_mem_batches)?;
         self.in_mem_batches.clear();
         let batch = sort_batch(&input_batch, &self.order, self.limit)?;
@@ -147,7 +149,6 @@ impl Stream for GroupedTopKLimitAggregateStream {
                         trace!("partition {} emit None", self.partition);
                         Poll::Ready(None)
                     }
-
                 }
                 // inner had error, return to caller
                 Some(Err(e)) => {
