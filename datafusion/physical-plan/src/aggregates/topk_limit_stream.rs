@@ -25,7 +25,7 @@ use crate::sorts::sort::sort_batch;
 use crate::{ExecutionPlan, RecordBatchStream, SendableRecordBatchStream};
 use arrow::compute::concat_batches;
 use arrow::util::pretty::print_batches;
-use arrow_array::RecordBatch;
+use arrow_array::{ArrayRef, RecordBatch};
 use arrow_schema::SchemaRef;
 use datafusion_common::DataFusionError;
 use datafusion_common::Result;
@@ -116,6 +116,8 @@ impl Stream for GroupedTopKLimitAggregateStream {
             match res {
                 // got a batch, convert to rows and append to our TreeMap
                 Some(Ok(batch)) => {
+                    // println!("{:?}", batch.schema());
+                    // println!("{:?}", self.schema());
                     trace!(
                         "partition {} has {} rows and got batch with {} rows",
                         self.partition,
@@ -123,13 +125,23 @@ impl Stream for GroupedTopKLimitAggregateStream {
                         batch.num_rows()
                     );
                     let batches = &[batch];
-                    // TODO: compute group by
+
+                    // println!("group by: {:?}", &self.group_by);
+                    // println!("aggregate arguments: {:?}", &self.aggregate_arguments);
+
                     let group_by_values =
                         evaluate_group_by(&self.group_by, batches.first().unwrap())?;
                     let input_values = evaluate_many(
                         &self.aggregate_arguments,
                         batches.first().unwrap(),
                     )?;
+                    // TODO: 1、性能问题 2、按order by 条件过滤比已有数据小的列，减少聚合数据
+                    let mut cols = group_by_values.into_iter().flatten().collect::<Vec<ArrayRef>>();
+                    let mut values = input_values.into_iter().flatten().collect::<Vec<ArrayRef>>();
+                    cols.append(&mut values);
+
+                    let batch = RecordBatch::try_new(self.schema.clone(), cols)?;
+                    self.in_mem_batches.push(batch);
 
                     self.sort_in_mem_batches()?
                 }

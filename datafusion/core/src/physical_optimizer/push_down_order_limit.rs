@@ -158,7 +158,7 @@ impl PhysicalOptimizerRule for PushDownOderLimit {
 }
 
 fn reorder(sort: &SortExec, aggr: &AggregateExec) -> Option<LexOrdering> {
-    let old = aggr
+    let old_group_expr = aggr
         .group_expr()
         .expr()
         .iter()
@@ -171,7 +171,7 @@ fn reorder(sort: &SortExec, aggr: &AggregateExec) -> Option<LexOrdering> {
         .iter()
         .map(|expr| (expr.expr.as_any().downcast_ref::<Column>().unwrap(), expr))
         .for_each(|(column, expr)| {
-            if old.contains(&column.name()) {
+            if old_group_expr.contains(&column.name()) {
                 common_columns.push(expr.clone());
             }
         });

@@ -454,8 +454,17 @@ impl AggregateExec {
                 self, context, partition,
             )?));
         }
-
-        if let (Some(_), Some(_)) = (self.limit, self.output_ordering()) {
+        /// TODO: 优化逻辑
+        /// group by 后只支持列, 不支持聚合函数,如
+        /// group a,b,c 支持
+        /// group by a, sum(b) 不支持
+        let column_type_count = self.group_by.expr.iter().filter(|(e, _)| {
+            match e.as_any().downcast_ref::<Column>() {
+                None => false,
+                Some(_) => true
+            }
+        }).count();
+        if let (Some(_), Some(_), true) = (self.limit, self.output_ordering(), self.group_by.expr.len() == column_type_count) {
             return Ok(StreamType::GroupedLimitQueue(
                 GroupedTopKLimitAggregateStream::new(self, context, partition)?,
             ));
